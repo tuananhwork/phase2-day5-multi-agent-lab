@@ -17,16 +17,29 @@ class AnalystAgent(BaseAgent):
 
     def run(self, state: ResearchState) -> ResearchState:
         """Populate `state.analysis_notes`."""
-        with trace_span("agent.analyst", {"query": state.request.query}) as span:
+        with trace_span(
+            "agent.analyst",
+            {
+                "query": state.request.query,
+                "research_notes_length": len(state.research_notes or ""),
+            },
+        ) as span:
             prompt = (
                 "Analyze the research notes. Return sections: Key Claims, Agreement/Disagreement, "
                 "Evidence Gaps, and Confidence."
             )
+            user_prompt = f"Query: {state.request.query}\n\nNotes:\n{state.research_notes or ''}\n\n{prompt}"
             llm_response = self._llm.complete(
                 system_prompt="You are a rigorous research analyst.",
-                user_prompt=f"Query: {state.request.query}\n\nNotes:\n{state.research_notes or ''}\n\n{prompt}",
+                user_prompt=user_prompt,
             )
             state.analysis_notes = llm_response.content
+            span["attributes"]["system_prompt"] = "You are a rigorous research analyst."
+            span["attributes"]["user_prompt_preview"] = user_prompt[:500]
+            span["attributes"]["analysis_notes_preview"] = state.analysis_notes[:500]
+            span["attributes"]["input_tokens"] = llm_response.input_tokens
+            span["attributes"]["output_tokens"] = llm_response.output_tokens
+            span["attributes"]["cost_usd"] = llm_response.cost_usd
             state.add_trace_event("agent.analyst", span)
             state.agent_results.append(
                 AgentResult(

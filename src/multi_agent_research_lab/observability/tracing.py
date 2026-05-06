@@ -47,7 +47,7 @@ def _start_langsmith_run(name: str, attributes: dict[str, Any]) -> Any | None:
         run = RunTree(
             name=name,
             run_type="chain",
-            inputs={"attributes": attributes},
+            inputs=attributes,
             project_name=settings.langsmith_project,
         )
         run.post()
@@ -63,7 +63,12 @@ def _end_langsmith_run(langsmith_run: Any | None, span: dict[str, Any], error: s
         if error:
             langsmith_run.end(error=error)
         else:
-            langsmith_run.end(outputs={"span": span})
+            langsmith_run.end(
+                outputs={
+                    "duration_seconds": span["duration_seconds"],
+                    "attributes": span["attributes"],
+                }
+            )
         langsmith_run.patch()
     except Exception:
         return

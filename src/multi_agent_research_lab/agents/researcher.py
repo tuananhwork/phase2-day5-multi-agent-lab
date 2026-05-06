@@ -28,12 +28,19 @@ class ResearcherAgent(BaseAgent):
             state.research_notes = "\n".join(note_lines)
 
             span["attributes"]["sources_count"] = len(docs)
+            span["attributes"]["source_titles"] = [d.title for d in docs[:5]]
+            span["attributes"]["source_urls"] = [d.url for d in docs[:5]]
+            span["attributes"]["research_notes_preview"] = state.research_notes[:500]
             state.add_trace_event("agent.researcher", span)
             state.agent_results.append(
                 AgentResult(
                     agent=AgentName.RESEARCHER,
                     content=state.research_notes,
-                    metadata={"sources_count": len(docs), "duration_seconds": span["duration_seconds"]},
+                    metadata={
+                        "sources_count": len(docs),
+                        "source_titles": [d.title for d in docs[:5]],
+                        "duration_seconds": span["duration_seconds"],
+                    },
                 )
             )
         return state

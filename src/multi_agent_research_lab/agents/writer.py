@@ -17,22 +17,36 @@ class WriterAgent(BaseAgent):
 
     def run(self, state: ResearchState) -> ResearchState:
         """Populate `state.final_answer`."""
-        with trace_span("agent.writer", {"query": state.request.query}) as span:
+        with trace_span(
+            "agent.writer",
+            {
+                "query": state.request.query,
+                "audience": state.request.audience,
+                "sources_count": len(state.sources),
+            },
+        ) as span:
             sources_text = "\n".join(
                 [f"[{idx}] {doc.title} ({doc.url or 'no-url'})" for idx, doc in enumerate(state.sources, start=1)]
             )
+            user_prompt = (
+                f"Write a clear answer for audience '{state.request.audience}'.\n"
+                "Use sections and include a short references list.\n\n"
+                f"Query:\n{state.request.query}\n\n"
+                f"Research Notes:\n{state.research_notes or ''}\n\n"
+                f"Analysis Notes:\n{state.analysis_notes or ''}\n\n"
+                f"Sources:\n{sources_text}"
+            )
             llm_response = self._llm.complete(
                 system_prompt="You are a concise technical writer.",
-                user_prompt=(
-                    f"Write a clear answer for audience '{state.request.audience}'.\n"
-                    "Use sections and include a short references list.\n\n"
-                    f"Query:\n{state.request.query}\n\n"
-                    f"Research Notes:\n{state.research_notes or ''}\n\n"
-                    f"Analysis Notes:\n{state.analysis_notes or ''}\n\n"
-                    f"Sources:\n{sources_text}"
-                ),
+                user_prompt=user_prompt,
             )
             state.final_answer = llm_response.content
+            span["attributes"]["system_prompt"] = "You are a concise technical writer."
+            span["attributes"]["user_prompt_preview"] = user_prompt[:500]
+            span["attributes"]["final_answer_preview"] = state.final_answer[:500]
+            span["attributes"]["input_tokens"] = llm_response.input_tokens
+            span["attributes"]["output_tokens"] = llm_response.output_tokens
+            span["attributes"]["cost_usd"] = llm_response.cost_usd
             state.add_trace_event("agent.writer", span)
             state.agent_results.append(
                 AgentResult(
