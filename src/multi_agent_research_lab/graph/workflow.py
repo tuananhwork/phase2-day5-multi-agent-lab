@@ -1,6 +1,7 @@
 """LangGraph workflow skeleton."""
 
-from multi_agent_research_lab.core.errors import StudentTodoError
+from multi_agent_research_lab.agents import AnalystAgent, ResearcherAgent, SupervisorAgent, WriterAgent
+from multi_agent_research_lab.core.config import get_settings
 from multi_agent_research_lab.core.state import ResearchState
 
 
@@ -10,19 +11,47 @@ class MultiAgentWorkflow:
     Keep orchestration here; keep agent internals in `agents/`.
     """
 
+    def __init__(self) -> None:
+        self._supervisor = SupervisorAgent()
+        self._researcher = ResearcherAgent()
+        self._analyst = AnalystAgent()
+        self._writer = WriterAgent()
+
     def build(self) -> object:
-        """Create a LangGraph graph.
+        """Create an executable workflow object.
 
-        TODO(student): Implement nodes, edges, conditional routing, and stop condition.
-        Suggested nodes: supervisor, researcher, analyst, writer, optional critic.
+        The starter repo allows a simple in-process orchestration loop.
         """
-
-        raise StudentTodoError("TODO(student): implement MultiAgentWorkflow.build")
+        return self
 
     def run(self, state: ResearchState) -> ResearchState:
-        """Execute the graph and return final state.
+        """Execute the workflow and return final state."""
+        settings = get_settings()
 
-        TODO(student): Compile graph, invoke it, and convert result back to ResearchState.
-        """
+        while state.iteration < settings.max_iterations:
+            self._supervisor.run(state)
+            route = state.route_history[-1]
+            try:
+                if route == "researcher":
+                    self._researcher.run(state)
+                elif route == "analyst":
+                    self._analyst.run(state)
+                elif route == "writer":
+                    self._writer.run(state)
+                elif route == "done":
+                    break
+                else:
+                    state.errors.append(f"Unknown route: {route}")
+                    break
+            except Exception as exc:
+                state.errors.append(f"{route} failed: {exc}")
+                state.add_trace_event("workflow.error", {"route": route, "error": str(exc)})
+                if route == "writer":
+                    break
 
-        raise StudentTodoError("TODO(student): implement MultiAgentWorkflow.run")
+        if not state.final_answer:
+            state.final_answer = (
+                "Workflow finished without a final answer. "
+                "Check state.errors and trace for details."
+            )
+        return state
